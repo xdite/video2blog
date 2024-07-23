@@ -9,7 +9,14 @@ def main():
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    url = st.text_input("請輸入 YouTube 影片 URL")
+    # 設置默認 URL
+    if 'default_url' not in st.session_state:
+        st.session_state.default_url = "https://www.youtube.com/watch?v=-X0jBz5_gCc"
+
+    url = st.text_input("請輸入 YouTube 影片 URL", value=st.session_state.default_url)
+
+    if url != st.session_state.default_url:
+        st.session_state.default_url = url
 
     if st.button("下載"):
         if url:
