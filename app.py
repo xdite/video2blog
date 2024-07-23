@@ -3,18 +3,42 @@ import os
 from yt_dlp import YoutubeDL
 from youtube_transcript_api import YouTubeTranscriptApi
 import re
+import unicodedata
 
 def sanitize_filename(filename):
-    return re.sub(r'[\\/*?:"<>|]', "", filename)
+    # 將檔案名轉換為 ASCII 字符，移除非 ASCII 字符
+    filename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore').decode()
 
-def download_video(url, output_path):
+    # 將空格替換為下劃線
+    filename = filename.replace(' ', '_')
+
+    # 移除或替換不允許的字符
+    filename = re.sub(r'[\\/*?:"<>|]', "", filename)
+
+    # 移除開頭的點號（在某些系統中可能會隱藏檔案）
+    filename = filename.lstrip('.')
+
+    # 將多個連續的下劃線替換為單個下劃線
+    filename = re.sub(r'_{2,}', '_', filename)
+
+    # 限制檔案名長度（例如，最長 255 字符）
+    filename = filename[:255]
+
+    # 確保檔案名不為空
+    if not filename:
+        filename = "untitled"
+
+    return filename
+
+def download_video(url, output_dir):
     ydl_opts = {
         'format': '18',  # 使用 format 18 下載 mp4
-        'outtmpl': output_path
+        'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
+        'restrictfilenames': True,  # 限制文件名為 ASCII 字符
     }
     with YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        return info.get('title', 'video')
+        return info['title'], info['ext']
 
 def get_subtitles(video_id):
     try:
@@ -51,8 +75,9 @@ def save_subtitles_as_srt(subtitles, filename):
 def main():
     st.title("YouTube 影片和字幕下載器")
 
-    if not os.path.exists('data'):
-        os.makedirs('data')
+    output_dir = 'data'
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
     url = st.text_input("請輸入 YouTube 影片 URL")
 
@@ -62,9 +87,9 @@ def main():
 
             # 下載影片
             try:
-                video_title = download_video(url, 'data/%(title)s.%(ext)s')
+                video_title, video_ext = download_video(url, output_dir)
                 safe_title = sanitize_filename(video_title)
-                mp4_path = f"data/{safe_title}.mp4"
+                mp4_path = os.path.join(output_dir, f"{safe_title}.{video_ext}")
                 st.success("影片下載成功!")
 
                 # 創建下載連結
@@ -72,7 +97,7 @@ def main():
                     btn = st.download_button(
                         label="下載 MP4 檔案",
                         data=file,
-                        file_name=f"{safe_title}.mp4",
+                        file_name=f"{safe_title}.{video_ext}",
                         mime="video/mp4"
                     )
             except Exception as e:
@@ -81,7 +106,7 @@ def main():
             # 獲取並保存字幕
             subtitles = get_subtitles(video_id)
             if subtitles:
-                srt_path = f"data/{safe_title}.srt"
+                srt_path = os.path.join(output_dir, f"{safe_title}.srt")
                 save_subtitles_as_srt(subtitles, srt_path)
                 st.success("字幕獲取並轉換成功!")
 
