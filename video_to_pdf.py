@@ -80,9 +80,10 @@ def video_to_images(video_file_name: str, progress_callback=None):
         if not os.path.exists(base_name):
             os.makedirs(base_name)
     except Exception:
-        pass  # 如果创建目录失败，继续执行
+        pass
 
     successful_frames = []
+    failed_frames = []
 
     for i, (start_time, end_time, text) in enumerate(subtitles):
         mid_time = (start_time + end_time) / 2
@@ -90,11 +91,13 @@ def video_to_images(video_file_name: str, progress_callback=None):
 
         if process_frame(video_file_name, mid_time, text, output_file, video_dimensions):
             successful_frames.append(output_file)
+        else:
+            failed_frames.append(i)
 
         if progress_callback:
-            progress_callback((i + 1) / len(subtitles) * 0.8)  # 假设转图片占整个过程的80%
+            progress_callback((i + 1) / len(subtitles))
 
-    return successful_frames
+    return successful_frames, failed_frames
 
 def convert_png_to_pdf(input_files, output_filename, progress_callback=None):
     output_file = output_filename + '.pdf'
@@ -108,44 +111,41 @@ def convert_png_to_pdf(input_files, output_filename, progress_callback=None):
                 img = img.convert("RGB")
             images.append(img)
         except Exception:
-            continue  # 如果处理单个图像失败，跳过该图像
+            continue
 
         if progress_callback:
-            progress_callback(0.8 + (i + 1) / len(input_files) * 0.2)  # 假设转PDF占整个过程的20%
+            progress_callback((i + 1) / len(input_files))
 
     if images:
         try:
             images[0].save(output_file, "PDF", resolution=100.0, save_all=True, append_images=images[1:])
-            print("Conversion from PNG to PDF is complete.")
+            return True
         except Exception:
-            print("Failed to create PDF, but some images were processed.")
+            return False
     else:
-        print("No valid images to convert to PDF.")
+        return False
 
-def video_to_pdf(video_file_name: str, progress_callback=None):
+def video_to_pdf(video_file_name: str, png_progress_callback=None, pdf_progress_callback=None):
     base_name = video_file_name.rsplit('.', 1)[0]
 
     # Step 1: Convert video to images with subtitles
-    successful_frames = video_to_images(video_file_name, progress_callback)
+    successful_frames, failed_frames = video_to_images(video_file_name, png_progress_callback)
 
     # Step 2: Convert images to PDF
+    pdf_created = False
     if successful_frames:
-        convert_png_to_pdf(successful_frames, base_name, progress_callback)
-    else:
-        print("No frames were successfully processed. PDF creation may fail.")
+        pdf_created = convert_png_to_pdf(successful_frames, base_name, pdf_progress_callback)
 
     # Clean up: remove individual frame images
     for frame in successful_frames:
         try:
             os.remove(frame)
         except Exception:
-            pass  # 如果删除失败，继续执行
+            pass
 
     try:
         os.rmdir(base_name)
-        print(f"Temporary directory {base_name} has been removed.")
     except Exception:
-        pass  # 如果删除目录失败，继续执行
+        pass
 
-    if progress_callback:
-        progress_callback(1.0)  # 确保进度到达100%
+    return pdf_created, failed_frames

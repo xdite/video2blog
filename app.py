@@ -105,15 +105,25 @@ def main():
     # 转换为 PDF
     if st.session_state.mp4_path and st.session_state.zh_srt_path and os.path.exists(st.session_state.zh_srt_path):
         if st.button("将视频转换为带中文字幕的 PDF"):
-            progress_bar = st.progress(0)
+            png_progress_bar = st.progress(0)
+            pdf_progress_bar = st.progress(0)
             status_text = st.empty()
 
-            def update_progress(progress):
-                progress_bar.progress(progress)
-                status_text.text(f"PDF 转换进度: {progress:.1%}")
+            def update_png_progress(progress):
+                png_progress_bar.progress(progress)
+                status_text.text(f"生成字幕帧进度: {progress:.1%}")
+
+            def update_pdf_progress(progress):
+                pdf_progress_bar.progress(progress)
+                status_text.text(f"转换 PDF 进度: {progress:.1%}")
 
             try:
-                video_to_pdf(st.session_state.mp4_path, progress_callback=update_progress)
+                pdf_created, failed_frames = video_to_pdf(
+                    st.session_state.mp4_path,
+                    png_progress_callback=update_png_progress,
+                    pdf_progress_callback=update_pdf_progress
+                )
+
                 pdf_path = f"{st.session_state.safe_title}.pdf"
                 if os.path.exists(pdf_path):
                     st.success("PDF 创建成功！")
@@ -124,10 +134,13 @@ def main():
                             file_name=pdf_path,
                             mime="application/pdf"
                         )
+
+                    if failed_frames:
+                        st.warning(f"注意：在处理过程中，第 {', '.join(map(str, failed_frames))} 帧出现问题被跳过。")
                 else:
-                    st.warning("PDF 创建过程中可能遇到了一些问题。请检查输出文件。")
+                    st.error("PDF 文件未找到。创建过程可能失败。")
             except Exception as e:
-                st.error(f"PDF 转换失败: {str(e)}")
+                st.error(f"PDF 转换过程中发生错误: {str(e)}")
 
 if __name__ == "__main__":
     main()
