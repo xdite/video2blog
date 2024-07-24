@@ -24,18 +24,20 @@ def translate_srt_file(file_path, api_key, target_language='zh', progress_callba
     subs = pysrt.open(file_path, encoding=result['encoding'])
 
     total_subs = len(subs)
+    translated_subs = 0
+
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future_to_sub = {executor.submit(translate_text, sub.text, api_key, target_language): sub for sub in subs}
-        for i, future in enumerate(concurrent.futures.as_completed(future_to_sub)):
+        for future in concurrent.futures.as_completed(future_to_sub):
             sub = future_to_sub[future]
             try:
                 translated_text = future.result()
                 sub.text = translated_text
+                translated_subs += 1
+                if progress_callback:
+                    progress_callback(translated_subs / total_subs)
             except Exception as exc:
                 print('%r generated an exception: %s' % (sub, exc))
-
-            if progress_callback:
-                progress_callback((i + 1) / total_subs)
 
     translated_file_path = file_path.replace('.srt', '.zh.srt')
     subs.save(translated_file_path, encoding='utf-8')

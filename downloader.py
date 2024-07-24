@@ -36,7 +36,19 @@ def download_video(url, output_dir, progress_callback):
 
 def get_subtitles(video_id):
     try:
-        transcript = YouTubeTranscriptApi.get_transcript(video_id)
+        # 首先尝试获取所有可用的字幕
+        transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+
+        # 查找所有以 'en' 开头的语言代码
+        en_transcripts = [t for t in transcript_list if t.language_code.startswith('en')]
+
+        if en_transcripts:
+            # 如果找到了英语字幕，使用第一个
+            transcript = en_transcripts[0].fetch()
+        else:
+            # 如果没有找到英语字幕，尝试获取任何可用的字幕
+            transcript = transcript_list.find_transcript(['en'])
+
         return transcript
     except Exception as e:
         raise Exception(f"无法获取字幕: {str(e)}")

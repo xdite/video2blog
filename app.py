@@ -35,7 +35,13 @@ def main():
             with st.spinner("正在下载视频和字幕..."):
                 try:
                     video_id = url.split("v=")[1]
-                    video_title, video_ext = download_video(url, output_dir, lambda p: None)
+
+                    # 添加下载进度条
+                    download_progress = st.progress(0)
+                    def update_download_progress(progress):
+                        download_progress.progress(progress)
+
+                    video_title, video_ext = download_video(url, output_dir, update_download_progress)
                     st.session_state.safe_title = sanitize_filename(video_title)
                     st.session_state.mp4_path = os.path.join(output_dir, f"{st.session_state.safe_title}.{video_ext}")
 
@@ -83,10 +89,15 @@ def main():
                         if not deepl_api_key:
                             st.error("未找到有效的 DeepL API Key。请检查 .env 文件。")
                         else:
+                            # 添加翻译进度条
+                            translation_progress = st.progress(0)
+                            def update_translation_progress(progress):
+                                translation_progress.progress(progress)
+
                             st.session_state.zh_srt_path = translate_srt_file(
                                 st.session_state.srt_path,
                                 deepl_api_key,
-                                progress_callback=lambda p: None
+                                progress_callback=update_translation_progress
                             )
                             st.success("字幕翻译成功！")
                     except Exception as e:
