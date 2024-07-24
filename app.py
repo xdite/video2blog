@@ -41,7 +41,12 @@ def main():
                     st.session_state.srt_path = os.path.join(output_dir, f"{st.session_state.safe_title}.srt")
                     save_subtitles_as_srt(subtitles, st.session_state.srt_path)
 
-                    st.success("视频和字幕下载成功！")
+                    # 检查是否已存在中文字幕文件
+                    st.session_state.zh_srt_path = os.path.join(output_dir, f"{st.session_state.safe_title}.zh.srt")
+                    if os.path.exists(st.session_state.zh_srt_path):
+                        st.success("视频、原始字幕和中文字幕下载成功！")
+                    else:
+                        st.success("视频和原始字幕下载成功！")
                 except Exception as e:
                     st.error(f"下载失败: {str(e)}")
         else:
@@ -68,21 +73,24 @@ def main():
 
     # 翻译字幕
     if st.session_state.srt_path and os.path.exists(st.session_state.srt_path):
-        if st.button("翻译字幕为简体中文"):
-            with st.spinner("正在翻译字幕..."):
-                try:
-                    deepl_api_key = os.getenv("DEEPL_API_KEY")
-                    if not deepl_api_key:
-                        st.error("未找到有效的 DeepL API Key。请检查 .env 文件。")
-                    else:
-                        st.session_state.zh_srt_path = translate_srt_file(
-                            st.session_state.srt_path,
-                            deepl_api_key,
-                            progress_callback=lambda p: None
-                        )
-                        st.success("字幕翻译成功！")
-                except Exception as e:
-                    st.error(f"翻译失败: {str(e)}")
+        if not os.path.exists(st.session_state.zh_srt_path):
+            if st.button("翻译字幕为简体中文"):
+                with st.spinner("正在翻译字幕..."):
+                    try:
+                        deepl_api_key = os.getenv("DEEPL_API_KEY")
+                        if not deepl_api_key:
+                            st.error("未找到有效的 DeepL API Key。请检查 .env 文件。")
+                        else:
+                            st.session_state.zh_srt_path = translate_srt_file(
+                                st.session_state.srt_path,
+                                deepl_api_key,
+                                progress_callback=lambda p: None
+                            )
+                            st.success("字幕翻译成功！")
+                    except Exception as e:
+                        st.error(f"翻译失败: {str(e)}")
+        else:
+            st.success("中文字幕文件已存在，无需翻译。")
 
     # 显示中文字幕下载链接
     if st.session_state.zh_srt_path and os.path.exists(st.session_state.zh_srt_path):
@@ -95,7 +103,7 @@ def main():
             )
 
     # 转换为 PDF
-    if st.session_state.mp4_path and st.session_state.zh_srt_path:
+    if st.session_state.mp4_path and st.session_state.zh_srt_path and os.path.exists(st.session_state.zh_srt_path):
         if st.button("将视频转换为带中文字幕的 PDF"):
             progress_bar = st.progress(0)
             status_text = st.empty()
