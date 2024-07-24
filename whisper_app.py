@@ -3,22 +3,44 @@ import os
 from dotenv import load_dotenv
 from downloader import download_video, get_subtitles, save_subtitles_as_srt, sanitize_filename
 import whisper
+import subprocess
+import json
 
 load_dotenv()
 
-def generate_subtitles_with_whisper(audio_file):
-    model = whisper.load_model("base")
-    result = model.transcribe(audio_file)
+def generate_subtitles_with_whisper_ctranslate2(audio_file, model="medium"):
+    output_json = audio_file.rsplit('.', 1)[0] + '.json'
 
-    subtitles = []
-    for segment in result["segments"]:
-        subtitles.append({
-            'start': segment['start'],
-            'duration': segment['end'] - segment['start'],
-            'text': segment['text']
-        })
+    # 使用subprocess调用whisper-ctranslate2
+    command = [
+        "whisper-ctranslate2",
+        audio_file,
+        "--model", model,
+        "--output_format", "json"
+    ]
 
-    return subtitles
+    try:
+        subprocess.run(command, check=True, capture_output=True, text=True)
+
+        # 读取生成的JSON文件
+        with open(output_json, 'r', encoding='utf-8') as f:
+            result = json.load(f)
+
+        # 转换为所需的字幕格式
+        subtitles = []
+        for segment in result['segments']:
+            subtitles.append({
+                'start': segment['start'],
+                'duration': segment['end'] - segment['start'],
+                'text': segment['text']
+            })
+
+        # 删除临时JSON文件
+        os.remove(output_json)
+
+        return subtitles
+    except subprocess.CalledProcessError as e:
+        raise Exception(f"Whisper-ctranslate2 处理失败: {e.stderr}")
 
 def main():
     st.title("YouTube 视频字幕生成器")
@@ -61,10 +83,10 @@ def main():
                     if subtitles:
                         st.success("成功获取 YouTube 字幕！")
                     else:
-                        st.warning("无法获取 YouTube 字幕，正在使用 Whisper 生成字幕...")
-                        with st.spinner("正在加载 Whisper 模型并生成字幕，这可能需要几分钟..."):
-                            subtitles = generate_subtitles_with_whisper(st.session_state.mp4_path)
-                        st.success("使用 Whisper 成功生成字幕！")
+                        st.warning("无法获取 YouTube 字幕，正在使用 Whisper-ctranslate2 生成字幕...")
+                        with st.spinner("正在使用 Whisper-ctranslate2 生成字幕，这可能需要几分钟..."):
+                            subtitles = generate_subtitles_with_whisper_ctranslate2(st.session_state.mp4_path)
+                        st.success("使用 Whisper-ctranslate2 成功生成字幕！")
 
                     st.session_state.srt_path = os.path.join(output_dir, f"{st.session_state.safe_title}.srt")
                     save_subtitles_as_srt(subtitles, st.session_state.srt_path)
