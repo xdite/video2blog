@@ -51,9 +51,9 @@ def main():
                         download_progress.progress(progress)
                         download_status.text(f"下载进度: {progress:.1%}")
 
-                    video_title, video_ext = download_video(url, output_dir, update_download_progress)
+                    video_title, video_ext, mp4_path = download_video(url, output_dir, update_download_progress)
                     st.session_state.safe_title = sanitize_filename(video_title)
-                    st.session_state.mp4_path = os.path.join(output_dir, f"{st.session_state.safe_title}.{video_ext}")
+                    st.session_state.mp4_path = mp4_path
 
                     download_status.text("正在获取字幕...")
                     subtitles = get_subtitles(url.split("v=")[1])
