@@ -25,6 +25,8 @@ def main():
         st.session_state.zh_srt_path = None
     if 'safe_title' not in st.session_state:
         st.session_state.safe_title = None
+    if 'pdf_path' not in st.session_state:
+        st.session_state.pdf_path = None
 
     url = st.text_input("请输入 YouTube 影片 URL", value=st.session_state.default_url)
 
@@ -104,52 +106,51 @@ def main():
 
     # 转换为 PDF
     if st.session_state.mp4_path and st.session_state.zh_srt_path and os.path.exists(st.session_state.zh_srt_path):
-        if st.button("将视频转换为带中文字幕的 PDF"):
-            png_progress_bar = st.progress(0)
-            pdf_progress_bar = st.progress(0)
-            status_text = st.empty()
+        st.session_state.pdf_path = os.path.join(output_dir, f"{st.session_state.safe_title}.pdf")
 
-            def update_png_progress(progress):
-                png_progress_bar.progress(progress)
-                status_text.text(f"生成字幕帧进度: {progress:.1%}")
+        if os.path.exists(st.session_state.pdf_path):
+            st.success("PDF 文件已存在，可以直接下载。")
+        else:
+            if st.button("将视频转换为带中文字幕的 PDF"):
+                png_progress_bar = st.progress(0)
+                pdf_progress_bar = st.progress(0)
+                status_text = st.empty()
 
-            def update_pdf_progress(progress):
-                pdf_progress_bar.progress(progress)
-                status_text.text(f"转换 PDF 进度: {progress:.1%}")
+                def update_png_progress(progress):
+                    png_progress_bar.progress(progress)
+                    status_text.text(f"生成字幕帧进度: {progress:.1%}")
 
-            try:
-                pdf_created, failed_frames = video_to_pdf(
-                    st.session_state.mp4_path,
-                    png_progress_callback=update_png_progress,
-                    pdf_progress_callback=update_pdf_progress
-                )
+                def update_pdf_progress(progress):
+                    pdf_progress_bar.progress(progress)
+                    status_text.text(f"转换 PDF 进度: {progress:.1%}")
 
-                pdf_path = os.path.join(output_dir, f"{st.session_state.safe_title}.pdf")
+                try:
+                    pdf_created, failed_frames = video_to_pdf(
+                        st.session_state.mp4_path,
+                        png_progress_callback=update_png_progress,
+                        pdf_progress_callback=update_pdf_progress
+                    )
 
-                # 总是显示下载链接
-                st.markdown(f"PDF 文件应该已经创建在以下路径：`{os.path.abspath(pdf_path)}`")
-                st.download_button(
-                    label="尝试下载 PDF 文件",
-                    data=pdf_path,
-                    file_name=os.path.basename(pdf_path),
-                    mime="application/pdf"
-                )
+                    if os.path.exists(st.session_state.pdf_path):
+                        st.success("PDF 文件创建成功！")
+                    else:
+                        st.warning("系统无法检测到 PDF 文件，但这可能是由于权限或路径问题。如果您确定文件已创建，可以尝试手动在输出目录查找。")
 
-                if os.path.exists(pdf_path):
-                    st.success("系统检测到 PDF 文件已成功创建！")
-                else:
-                    st.warning("系统无法检测到 PDF 文件，但这可能是由于权限或路径问题。如果您确定文件已创建，可以尝试手动在上述路径查找。")
+                    if failed_frames:
+                        st.info(f"注意：在处理过程中，第 {', '.join(map(str, failed_frames))} 帧出现问题被跳过。")
 
-                if failed_frames:
-                    st.info(f"注意：在处理过程中，第 {', '.join(map(str, failed_frames))} 帧出现问题被跳过。")
+                except Exception as e:
+                    st.error(f"PDF 转换过程中发生错误: {str(e)}")
 
-                if pdf_created:
-                    st.success("PDF 创建过程完成，但请注意系统的文件检测结果。")
-                else:
-                    st.warning("PDF 创建过程可能遇到了一些问题，但文件可能仍然被成功创建。")
-
-            except Exception as e:
-                st.error(f"PDF 转换过程中发生错误: {str(e)}")
+    # 显示 PDF 下载链接
+    if st.session_state.pdf_path and os.path.exists(st.session_state.pdf_path):
+        with open(st.session_state.pdf_path, "rb") as file:
+            st.download_button(
+                label="下载 PDF 文件",
+                data=file,
+                file_name=f"{st.session_state.safe_title}.pdf",
+                mime="application/pdf"
+            )
 
 if __name__ == "__main__":
     main()
