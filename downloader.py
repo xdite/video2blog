@@ -3,7 +3,11 @@ from yt_dlp import YoutubeDL
 from youtube_transcript_api import YouTubeTranscriptApi
 import re
 import unicodedata
-import deepl
+import requests
+import pysrt
+import concurrent.futures
+from tqdm import tqdm
+import chardet
 
 def sanitize_filename(filename):
     filename = unicodedata.normalize('NFKD', filename).encode('ASCII', 'ignore').decode()
@@ -66,27 +70,40 @@ def save_subtitles_as_srt(subtitles, filename):
             f.write(f"{start_time} --> {end_time}\n")
             f.write(f"{subtitle['text']}\n\n")
 
-def translate_subtitles(subtitles, target_lang='zh', api_key=None, progress_callback=None):
-    if not api_key:
-        raise ValueError("DeepL API key is required for translation.")
+def translate_text(text, api_key, target_language='zh'):
+    text = text.replace("\h", " ")
+    base_url = 'https://api.deepl.com/v2/translate'
+    payload = {
+        'auth_key': api_key,
+        'text': text,
+        'target_lang': target_language,
+    }
+    response = requests.post(base_url, data=payload)
+    if response.status_code != 200:
+        raise Exception('DeepL request failed with status code {}'.format(response.status_code))
+    translated_text = response.json()['translations'][0]['text']
+    return translated_text
 
-    translator = deepl.Translator(api_key)
-    translated_subtitles = []
+def translate_srt_file(file_path, api_key, target_language='zh', progress_callback=None):
+    with open(file_path, 'rb') as f:
+        result = chardet.detect(f.read())
 
-    total_subtitles = len(subtitles)
-    for i, subtitle in enumerate(subtitles):
-        translated_text = translator.translate_text(subtitle['text'], target_lang=target_lang)
-        translated_subtitle = subtitle.copy()
-        translated_subtitle['text'] = translated_text.text
-        translated_subtitles.append(translated_subtitle)
+    subs = pysrt.open(file_path, encoding=result['encoding'])
 
-        if progress_callback:
-            progress_callback((i + 1) / total_subtitles)
+    total_subs = len(subs)
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future_to_sub = {executor.submit(translate_text, sub.text, api_key, target_language): sub for sub in subs}
+        for i, future in enumerate(concurrent.futures.as_completed(future_to_sub)):
+            sub = future_to_sub[future]
+            try:
+                translated_text = future.result()
+                sub.text = translated_text
+            except Exception as exc:
+                print('%r generated an exception: %s' % (sub, exc))
 
-    return translated_subtitles
+            if progress_callback:
+                progress_callback((i + 1) / total_subs)
 
-def save_translated_subtitles(original_srt_path, translated_subtitles):
-    filename, _ = os.path.splitext(original_srt_path)
-    translated_srt_path = f"{filename}.zh.srt"
-    save_subtitles_as_srt(translated_subtitles, translated_srt_path)
-    return translated_srt_path
+    translated_file_path = file_path.replace('.srt', '.zh.srt')
+    subs.save(translated_file_path, encoding='utf-8')
+    return translated_file_path

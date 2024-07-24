@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from dotenv import load_dotenv
-from downloader import download_video, get_subtitles, save_subtitles_as_srt, sanitize_filename, translate_subtitles, save_translated_subtitles
+from downloader import download_video, get_subtitles, save_subtitles_as_srt, sanitize_filename, translate_srt_file
 
 # 加载 .env 文件
 load_dotenv()
@@ -21,11 +21,6 @@ def main():
 
     if url != st.session_state.default_url:
         st.session_state.default_url = url
-
-    # 从环境变量获取 DeepL API Key
-    deepl_api_key = os.getenv("DEEPL_API_KEY")
-    if not deepl_api_key:
-        st.warning("未找到 DeepL API Key。请在 .env 文件中设置 DEEPL_API_KEY。")
 
     if st.button("下载视频和字幕"):
         if url:
@@ -75,8 +70,7 @@ def main():
                             mime="text/srt"
                         )
 
-                    # 保存字幕到会话状态
-                    st.session_state.subtitles = subtitles
+                    # 保存字幕路径到会话状态
                     st.session_state.srt_path = srt_path
                     st.session_state.safe_title = safe_title
 
@@ -91,7 +85,7 @@ def main():
             st.warning("请输入有效的 YouTube URL")
 
 def translate_subtitles_to_chinese():
-    if 'subtitles' not in st.session_state or 'srt_path' not in st.session_state or 'safe_title' not in st.session_state:
+    if 'srt_path' not in st.session_state or 'safe_title' not in st.session_state:
         st.error("请先下载视频和字幕")
         return
 
@@ -109,13 +103,11 @@ def translate_subtitles_to_chinese():
             progress_bar.progress(progress)
             status_text.text(f"翻译进度: {progress:.1%}")
 
-        translated_subtitles = translate_subtitles(
-            st.session_state.subtitles,
-            'zh',
+        translated_srt_path = translate_srt_file(
+            st.session_state.srt_path,
             deepl_api_key,
             progress_callback=update_translation_progress
         )
-        translated_srt_path = save_translated_subtitles(st.session_state.srt_path, translated_subtitles)
         status_text.text("字幕翻译成功!")
 
         # 创建翻译后的字幕下载链接
