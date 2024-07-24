@@ -1,3 +1,10 @@
-yt-dlp
-youtube-transcript-api
-deepl
+streamlit==1.22.0
+python-dotenv==1.0.0
+yt-dlp==2023.3.4
+youtube-transcript-api==0.6.0
+moviepy==1.0.3
+Pillow==9.5.0
+tqdm==4.65.0
+requests==2.30.0
+pysrt==1.1.2
+deepl==1.14.0
