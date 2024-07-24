@@ -3,12 +3,13 @@ import os
 from dotenv import load_dotenv
 from downloader import download_video, get_subtitles, save_subtitles_as_srt, sanitize_filename
 from translator import translate_srt_file
+from video_to_pdf import video_to_pdf
 
 # 加载 .env 文件
 load_dotenv()
 
 def main():
-    st.title("YouTube 影片和字幕下载器")
+    st.title("YouTube 影片下载器与字幕转换器")
 
     output_dir = 'data'
     if not os.path.exists(output_dir):
@@ -119,6 +120,25 @@ def main():
                 file_name=f"{st.session_state.safe_title}.zh.srt",
                 mime="text/srt"
             )
+
+        # 添加转换为 PDF 的选项
+        if st.button("将视频转换为带中文字幕的 PDF"):
+            try:
+                with st.spinner("正在转换视频为 PDF，这可能需要一些时间..."):
+                    video_to_pdf(st.session_state.mp4_path)
+                st.success(f"转换完成！PDF 文件已保存为 {st.session_state.safe_title}.pdf")
+
+                # 提供 PDF 下载链接
+                pdf_path = f"{st.session_state.safe_title}.pdf"
+                with open(pdf_path, "rb") as file:
+                    st.download_button(
+                        label="下载带中文字幕的 PDF",
+                        data=file,
+                        file_name=pdf_path,
+                        mime="application/pdf"
+                    )
+            except Exception as e:
+                st.error(f"PDF 转换失败: {str(e)}")
 
 if __name__ == "__main__":
     main()
