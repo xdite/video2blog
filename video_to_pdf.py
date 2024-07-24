@@ -21,19 +21,29 @@ def get_video_dimensions(video_path):
     return display_width, height
 
 def extract_frame(video_file, time, output_file):
-    subprocess.call(['ffmpeg', '-ss', str(time), '-i', video_file, '-vframes', '1', '-q:v', '2', output_file, '-y'])
+    try:
+        subprocess.check_call(['ffmpeg', '-ss', str(time), '-i', video_file, '-vframes', '1', '-q:v', '2', output_file, '-y'], stderr=subprocess.DEVNULL)
+        return True
+    except subprocess.CalledProcessError:
+        print(f"Failed to extract frame at time {time}")
+        return False
 
 def add_subtitle_to_image(image_file, subtitle_text, output_file, video_dimensions):
     frame_width, frame_height = video_dimensions
-    font_size = int(frame_height / 20)  # Adjust this value to change text size
-    y_position = int(frame_height * 0.9)  # Adjust this value to change text position
+    font_size = int(frame_height / 20)
+    y_position = int(frame_height * 0.9)
 
-    ffmpeg_command = [
-        'ffmpeg', '-i', image_file,
-        '-vf', f"drawtext=fontfile=/path/to/font.ttf:fontsize={font_size}:fontcolor=yellow:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-tw)/2:y={y_position}:text='{subtitle_text}'",
-        '-c:a', 'copy', output_file, '-y'
-    ]
-    subprocess.call(ffmpeg_command)
+    try:
+        ffmpeg_command = [
+            'ffmpeg', '-i', image_file,
+            '-vf', f"drawtext=fontfile=/System/Library/Fonts/PingFang.ttc:fontsize={font_size}:fontcolor=yellow:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-tw)/2:y={y_position}:text='{subtitle_text}'",
+            '-c:a', 'copy', output_file, '-y'
+        ]
+        subprocess.check_call(ffmpeg_command, stderr=subprocess.DEVNULL)
+        return True
+    except subprocess.CalledProcessError:
+        print(f"Failed to add subtitle to image: {image_file}")
+        return False
 
 def parse_srt(srt_file):
     with open(srt_file, 'r', encoding='utf-8') as f:
@@ -70,47 +80,64 @@ def video_to_images(video_file_name: str):
         print(f"Failed to create directory: {base_name}. Error: {e}")
         raise
 
+    successful_frames = []
+
     for i, (start_time, end_time, text) in tqdm(enumerate(subtitles), total=len(subtitles), desc="Processing frames"):
         mid_time = (start_time + end_time) / 2
         frame_file = f"{base_name}/{i:04}_frame.png"
         subtitled_frame_file = f"{base_name}/{i:04}.png"
 
-        extract_frame(video_file_name, mid_time, frame_file)
-        add_subtitle_to_image(frame_file, text, subtitled_frame_file, video_dimensions)
+        if extract_frame(video_file_name, mid_time, frame_file):
+            if add_subtitle_to_image(frame_file, text, subtitled_frame_file, video_dimensions):
+                successful_frames.append(subtitled_frame_file)
 
-        # Remove the intermediate frame file
-        os.remove(frame_file)
+            # Remove the intermediate frame file
+            os.remove(frame_file)
 
-def convert_png_to_pdf(input_directory, output_filename):
+    return successful_frames
+
+def convert_png_to_pdf(input_files, output_filename):
     output_file = output_filename + '.pdf'
 
     images = []
 
-    for filename in sorted(os.listdir(input_directory)):
-        if filename.endswith(".png"):
-            img = Image.open(os.path.join(input_directory, filename))
+    for filename in input_files:
+        try:
+            img = Image.open(filename)
             if img.mode != "RGB":
                 img = img.convert("RGB")
             images.append(img)
+        except Exception as e:
+            print(f"Error processing image {filename}: {e}")
 
     if images:
         images[0].save(output_file, "PDF", resolution=100.0, save_all=True, append_images=images[1:])
-
-    print("Conversion from PNG to PDF is complete.")
-
-    try:
-        shutil.rmtree(input_directory)
-        print("Directory deleted successfully.")
-    except OSError as e:
-        print("Error: %s : %s" % (input_directory, e.strerror))
+        print("Conversion from PNG to PDF is complete.")
+    else:
+        print("No valid images to convert to PDF.")
 
 def video_to_pdf(video_file_name: str):
     base_name = video_file_name.rsplit('.', 1)[0]
 
     # Step 1: Convert video to images with subtitles
-    video_to_images(video_file_name)
+    successful_frames = video_to_images(video_file_name)
 
     # Step 2: Convert images to PDF
-    convert_png_to_pdf(base_name, base_name)
+    if successful_frames:
+        convert_png_to_pdf(successful_frames, base_name)
+        print(f"Video has been converted to PDF: {base_name}.pdf")
+    else:
+        print("No frames were successfully processed. PDF creation failed.")
 
-    print(f"Video has been converted to PDF: {base_name}.pdf")
+    # Clean up: remove individual frame images
+    for frame in successful_frames:
+        try:
+            os.remove(frame)
+        except OSError as e:
+            print(f"Error deleting file {frame}: {e}")
+
+    try:
+        os.rmdir(base_name)
+        print(f"Temporary directory {base_name} has been removed.")
+    except OSError as e:
+        print(f"Error removing directory {base_name}: {e}")
