@@ -125,20 +125,29 @@ def main():
                 )
 
                 pdf_path = f"{st.session_state.safe_title}.pdf"
-                if os.path.exists(pdf_path):
-                    st.success("PDF 创建成功！")
-                    with open(pdf_path, "rb") as file:
-                        st.download_button(
-                            label="下载带中文字幕的 PDF",
-                            data=file,
-                            file_name=pdf_path,
-                            mime="application/pdf"
-                        )
 
-                    if failed_frames:
-                        st.warning(f"注意：在处理过程中，第 {', '.join(map(str, failed_frames))} 帧出现问题被跳过。")
+                # 总是显示下载链接
+                st.markdown(f"PDF 文件应该已经创建在以下路径：`{os.path.abspath(pdf_path)}`")
+                st.download_button(
+                    label="尝试下载 PDF 文件",
+                    data=pdf_path,
+                    file_name=os.path.basename(pdf_path),
+                    mime="application/pdf"
+                )
+
+                if os.path.exists(pdf_path):
+                    st.success("系统检测到 PDF 文件已成功创建！")
                 else:
-                    st.error("PDF 文件未找到。创建过程可能失败。")
+                    st.warning("系统无法检测到 PDF 文件，但这可能是由于权限或路径问题。如果您确定文件已创建，可以尝试手动在上述路径查找。")
+
+                if failed_frames:
+                    st.info(f"注意：在处理过程中，第 {', '.join(map(str, failed_frames))} 帧出现问题被跳过。")
+
+                if pdf_created:
+                    st.success("PDF 创建过程完成，但请注意系统的文件检测结果。")
+                else:
+                    st.warning("PDF 创建过程可能遇到了一些问题，但文件可能仍然被成功创建。")
+
             except Exception as e:
                 st.error(f"PDF 转换过程中发生错误: {str(e)}")
 
