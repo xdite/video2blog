@@ -1,11 +1,9 @@
 import os
-from moviepy.editor import TextClip, ImageClip, CompositeVideoClip, VideoFileClip
-from multiprocessing import Pool, cpu_count
-from tqdm import tqdm
 import subprocess
 import json
 from PIL import Image
 import shutil
+from tqdm import tqdm
 
 def get_video_dimensions(video_path):
     cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0",
@@ -22,60 +20,48 @@ def get_video_dimensions(video_path):
 
     return display_width, height
 
-def process_subtitle(args):
-    i, zh_subtitle, video_file_name, base_name = args
+def extract_frame(video_file, time, output_file):
+    subprocess.call(['ffmpeg', '-ss', str(time), '-i', video_file, '-vframes', '1', '-q:v', '2', output_file, '-y'])
 
-    clip = VideoFileClip(video_file_name)
+def add_subtitle_to_image(image_file, subtitle_text, output_file, video_dimensions):
+    frame_width, frame_height = video_dimensions
+    font_size = int(frame_height / 20)  # Adjust this value to change text size
+    y_position = int(frame_height * 0.9)  # Adjust this value to change text position
 
-    zh_parts = zh_subtitle.split("\n")
+    ffmpeg_command = [
+        'ffmpeg', '-i', image_file,
+        '-vf', f"drawtext=fontfile=/path/to/font.ttf:fontsize={font_size}:fontcolor=yellow:box=1:boxcolor=black@0.5:boxborderw=5:x=(w-tw)/2:y={y_position}:text='{subtitle_text}'",
+        '-c:a', 'copy', output_file, '-y'
+    ]
+    subprocess.call(ffmpeg_command)
 
-    if len(zh_parts) >= 3:
-        times = zh_parts[1].split(" --> ")
-        start_time = times[0].split(":")
-        end_time = times[1].split(":")
-        start_time = int(start_time[0])*3600 + int(start_time[1])*60 + float(start_time[2].replace(",", "."))
-        end_time = int(end_time[0])*3600 + int(end_time[1])*60 + float(end_time[2].replace(",", "."))
+def parse_srt(srt_file):
+    with open(srt_file, 'r', encoding='utf-8') as f:
+        content = f.read()
 
-        mid_time = start_time + ((end_time - start_time) / 3)
+    subtitles = []
+    for block in content.strip().split('\n\n'):
+        parts = block.split('\n')
+        if len(parts) >= 3:
+            time_str = parts[1]
+            text = ' '.join(parts[2:])
+            start_time, end_time = time_str.split(' --> ')
+            start_time = time_to_seconds(start_time)
+            end_time = time_to_seconds(end_time)
+            subtitles.append((start_time, end_time, text))
 
-        zh_text = " ".join(zh_parts[2:])
-        frame_width, frame_height = get_video_dimensions(video_file_name)
+    return subtitles
 
-        if frame_width > frame_height:
-            scale_factor = frame_width / 1920
-        else:
-            scale_factor = frame_height / 1920
-
-        zh_text_size = 50 * scale_factor
-
-        if frame_width > 640:
-            zh_text_pos = ('center', frame_height - 100)
-        else:
-            zh_text_pos = ('center', frame_height - 30)
-
-        if os.sys.platform == "darwin":
-            font_name = "黑體-簡-中黑"
-        else:
-            font_name = "Noto-Sans-Mono-CJK-SC"
-
-        zh_text_clip = (TextClip(zh_text, font=font_name, fontsize=zh_text_size, bg_color='black', color='yellow', stroke_width=0.25*scale_factor)
-            .set_duration(end_time - mid_time)
-            .set_position(zh_text_pos))
-
-        frame = clip.get_frame(mid_time)
-        frame_clip = ImageClip(frame).set_duration(end_time - mid_time).resize((frame_width, frame_height))
-
-        final = CompositeVideoClip([frame_clip, zh_text_clip])
-        final.save_frame(f"{base_name}/{i:04}.png")
-
-    return i
+def time_to_seconds(time_str):
+    h, m, s = time_str.replace(',', '.').split(':')
+    return int(h) * 3600 + int(m) * 60 + float(s)
 
 def video_to_images(video_file_name: str):
     base_name = video_file_name.rsplit('.', 1)[0]
     zh_subtitle_file_name = base_name + '.zh.srt'
 
-    with open(zh_subtitle_file_name, "r") as f:
-        zh_subtitles = f.read().split("\n\n")
+    subtitles = parse_srt(zh_subtitle_file_name)
+    video_dimensions = get_video_dimensions(video_file_name)
 
     try:
         if not os.path.exists(base_name):
@@ -84,9 +70,16 @@ def video_to_images(video_file_name: str):
         print(f"Failed to create directory: {base_name}. Error: {e}")
         raise
 
-    with Pool(cpu_count()) as pool:
-        for _ in tqdm(pool.imap_unordered(process_subtitle, [(i, zh_subtitles[i], video_file_name, base_name) for i in range(len(zh_subtitles))]), total=len(zh_subtitles)):
-            pass
+    for i, (start_time, end_time, text) in tqdm(enumerate(subtitles), total=len(subtitles), desc="Processing frames"):
+        mid_time = (start_time + end_time) / 2
+        frame_file = f"{base_name}/{i:04}_frame.png"
+        subtitled_frame_file = f"{base_name}/{i:04}.png"
+
+        extract_frame(video_file_name, mid_time, frame_file)
+        add_subtitle_to_image(frame_file, text, subtitled_frame_file, video_dimensions)
+
+        # Remove the intermediate frame file
+        os.remove(frame_file)
 
 def convert_png_to_pdf(input_directory, output_filename):
     output_file = output_filename + '.pdf'

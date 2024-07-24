@@ -86,36 +86,42 @@ def main():
                 mime="text/srt"
             )
 
-        # 显示翻译选项
-        translate_button = st.empty()
-        if translate_button.button("翻译字幕为简体中文"):
-            deepl_api_key = os.getenv("DEEPL_API_KEY")
-            if not deepl_api_key:
-                st.error("未找到有效的 DeepL API Key。请检查 .env 文件。")
-            else:
-                # 创建翻译进度条
-                progress_bar = st.progress(0)
-                status_text = st.empty()
+        # 检查是否已存在中文字幕文件
+        zh_srt_path = st.session_state.srt_path.replace('.srt', '.zh.srt')
+        if os.path.exists(zh_srt_path):
+            st.session_state.translated_srt_path = zh_srt_path
+            st.success("已找到现有的中文字幕文件。")
+        else:
+            # 显示翻译选项
+            translate_button = st.empty()
+            if translate_button.button("翻译字幕为简体中文"):
+                deepl_api_key = os.getenv("DEEPL_API_KEY")
+                if not deepl_api_key:
+                    st.error("未找到有效的 DeepL API Key。请检查 .env 文件。")
+                else:
+                    # 创建翻译进度条
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
 
-                try:
-                    def update_translation_progress(progress):
-                        progress_bar.progress(progress)
-                        status_text.text(f"翻译进度: {progress:.1%}")
+                    try:
+                        def update_translation_progress(progress):
+                            progress_bar.progress(progress)
+                            status_text.text(f"翻译进度: {progress:.1%}")
 
-                    st.session_state.translated_srt_path = translate_srt_file(
-                        st.session_state.srt_path,
-                        deepl_api_key,
-                        progress_callback=update_translation_progress
-                    )
-                    status_text.text("字幕翻译成功!")
-                except Exception as e:
-                    st.error(f"字幕翻译失败: {str(e)}")
+                        st.session_state.translated_srt_path = translate_srt_file(
+                            st.session_state.srt_path,
+                            deepl_api_key,
+                            progress_callback=update_translation_progress
+                        )
+                        status_text.text("字幕翻译成功!")
+                    except Exception as e:
+                        st.error(f"字幕翻译失败: {str(e)}")
 
     # 显示翻译后的字幕下载链接
     if st.session_state.translated_srt_path:
         with open(st.session_state.translated_srt_path, "rb") as file:
             st.download_button(
-                label="下载翻译后的简体中文 SRT 字幕文件",
+                label="下载简体中文 SRT 字幕文件",
                 data=file,
                 file_name=f"{st.session_state.safe_title}.zh.srt",
                 mime="text/srt"
