@@ -1,7 +1,8 @@
 import streamlit as st
 import os
 from dotenv import load_dotenv
-from downloader import download_video, get_subtitles, save_subtitles_as_srt, sanitize_filename, translate_srt_file
+from downloader import download_video, get_subtitles, save_subtitles_as_srt, sanitize_filename
+from translator import translate_srt_file
 
 # 加载 .env 文件
 load_dotenv()
