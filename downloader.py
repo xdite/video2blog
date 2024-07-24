@@ -51,7 +51,9 @@ def get_subtitles(video_id):
 
         return transcript
     except Exception as e:
-        raise Exception(f"无法获取字幕: {str(e)}")
+        # 如果出现异常，返回 None 而不是抛出异常
+        print(f"无法获取字幕: {str(e)}")
+        return None
 
 def save_subtitles_as_srt(subtitles, filename):
     with open(filename, 'w', encoding='utf-8') as f:

@@ -8,3 +8,4 @@ tqdm==4.65.0
 requests==2.30.0
 pysrt==1.1.2
 deepl==1.14.0
+faster-whisper
