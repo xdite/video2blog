@@ -66,18 +66,22 @@ def save_subtitles_as_srt(subtitles, filename):
             f.write(f"{start_time} --> {end_time}\n")
             f.write(f"{subtitle['text']}\n\n")
 
-def translate_subtitles(subtitles, target_lang='zh', api_key=None):
+def translate_subtitles(subtitles, target_lang='zh', api_key=None, progress_callback=None):
     if not api_key:
         raise ValueError("DeepL API key is required for translation.")
 
     translator = deepl.Translator(api_key)
     translated_subtitles = []
 
-    for subtitle in subtitles:
+    total_subtitles = len(subtitles)
+    for i, subtitle in enumerate(subtitles):
         translated_text = translator.translate_text(subtitle['text'], target_lang=target_lang)
         translated_subtitle = subtitle.copy()
         translated_subtitle['text'] = translated_text.text
         translated_subtitles.append(translated_subtitle)
+
+        if progress_callback:
+            progress_callback((i + 1) / total_subtitles)
 
     return translated_subtitles
 
