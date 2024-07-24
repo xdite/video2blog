@@ -9,3 +9,6 @@ requests==2.30.0
 pysrt==1.1.2
 deepl==1.14.0
 faster-whisper
+tiktoken==0.4.0
+transformers==4.36.0
+huggingface-hub==0.19.3
