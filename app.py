@@ -124,7 +124,7 @@ def main():
                     pdf_progress_callback=update_pdf_progress
                 )
 
-                pdf_path = f"{st.session_state.safe_title}.pdf"
+                pdf_path = os.path.join(output_dir, f"{st.session_state.safe_title}.pdf")
 
                 # 总是显示下载链接
                 st.markdown(f"PDF 文件应该已经创建在以下路径：`{os.path.abspath(pdf_path)}`")
