@@ -25,12 +25,30 @@ def download_video(url, output_dir, progress_callback):
                 progress_callback(progress)
 
     ydl_opts = {
-        'format': 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[ext=mp4]/best',
+        'format': 'bestvideo[height<=1080][ext=mp4]',
         'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
-        'restrictfilenames': False,  # 不限制文件名为 ASCII 字符
+        'restrictfilenames': False,
         'progress_hooks': [yt_dlp_hook],
+        'postprocessors': [],  # 移除所有后处理器，包括合并
     }
+
     with YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+        formats = info['formats']
+
+        # 尝试找到 720p 或 1080p 的视频
+        selected_format = None
+        for f in formats:
+            if f['ext'] == 'mp4' and f.get('height') in [720, 1080]:
+                selected_format = f
+                break
+
+        if selected_format:
+            ydl_opts['format'] = f"{selected_format['format_id']}+bestaudio[ext=m4a]/best[ext=mp4]/best"
+        else:
+            ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+
+        # 下载视频
         info = ydl.extract_info(url, download=True)
         title = info['title']
         ext = info['ext']
