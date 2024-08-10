@@ -1,7 +1,7 @@
 import streamlit as st
 import os
 from dotenv import load_dotenv
-from downloader import download_video, get_subtitles, save_subtitles_as_srt, sanitize_filename
+from downloader import download_video, get_subtitles, save_subtitles_as_srt
 from translator import translate_srt_file
 from video_to_pdf import video_to_pdf
 
@@ -23,8 +23,6 @@ def main():
         st.session_state.srt_path = None
     if 'zh_srt_path' not in st.session_state:
         st.session_state.zh_srt_path = None
-    if 'safe_title' not in st.session_state:
-        st.session_state.safe_title = None
     if 'pdf_path' not in st.session_state:
         st.session_state.pdf_path = None
 
@@ -36,32 +34,31 @@ def main():
                 try:
                     video_id = url.split("v=")[1]
 
-                    # 添加下载进度条
                     download_progress = st.progress(0)
                     def update_download_progress(progress):
                         download_progress.progress(progress)
 
-                    video_title, video_ext, video_path = download_video(url, output_dir, update_download_progress)
-                    st.session_state.safe_title = sanitize_filename(video_title)
+                    video_filename, video_path = download_video(url, output_dir, update_download_progress)
                     st.session_state.mp4_path = video_path
 
                     st.write(f"Debug: Video downloaded to {st.session_state.mp4_path}")
 
+                    base_filename = os.path.splitext(video_filename)[0]
+
                     subtitles = get_subtitles(video_id)
-                    st.session_state.srt_path = os.path.join(output_dir, f"{st.session_state.safe_title}.srt")
+                    st.session_state.srt_path = os.path.join(output_dir, f"{base_filename}.srt")
                     save_subtitles_as_srt(subtitles, st.session_state.srt_path)
 
                     st.write(f"Debug: Subtitles saved to {st.session_state.srt_path}")
 
-                    # 检查是否已存在中文字幕文件
-                    st.session_state.zh_srt_path = os.path.join(output_dir, f"{st.session_state.safe_title}.zh.srt")
+                    st.session_state.zh_srt_path = os.path.join(output_dir, f"{base_filename}.zh.srt")
                     if os.path.exists(st.session_state.zh_srt_path):
                         st.success("视频、原始字幕和中文字幕下载成功！")
                     else:
                         st.success("视频和原始字幕下载成功！")
 
                     # 自动开始生成 PDF
-                    st.session_state.pdf_path = os.path.join(output_dir, f"{st.session_state.safe_title}.pdf")
+                    st.session_state.pdf_path = os.path.join(output_dir, f"{base_filename}.pdf")
                     if not os.path.exists(st.session_state.pdf_path):
                         st.info("正在生成 PDF...")
                         png_progress_bar = st.progress(0)
@@ -107,7 +104,7 @@ def main():
             st.download_button(
                 label="下载 MP4 文件",
                 data=file,
-                file_name=f"{st.session_state.safe_title}.mp4",
+                file_name=os.path.basename(st.session_state.mp4_path),
                 mime="video/mp4"
             )
 
@@ -116,7 +113,7 @@ def main():
             st.download_button(
                 label="下载原始 SRT 字幕文件",
                 data=file,
-                file_name=f"{st.session_state.safe_title}.srt",
+                file_name=os.path.basename(st.session_state.srt_path),
                 mime="text/srt"
             )
 
@@ -126,7 +123,7 @@ def main():
             st.download_button(
                 label="下载 PDF 文件",
                 data=file,
-                file_name=f"{st.session_state.safe_title}.pdf",
+                file_name=os.path.basename(st.session_state.pdf_path),
                 mime="application/pdf"
             )
 
