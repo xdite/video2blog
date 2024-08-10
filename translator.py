@@ -1,44 +1,56 @@
-import requests
+import deepl
 import pysrt
+import time
 import concurrent.futures
-import chardet
+from tqdm import tqdm
 
-def translate_text(text, api_key, target_language='zh'):
-    text = text.replace("\h", " ")
-    base_url = 'https://api.deepl.com/v2/translate'
-    payload = {
-        'auth_key': api_key,
-        'text': text,
-        'target_lang': target_language,
-    }
-    response = requests.post(base_url, data=payload)
-    if response.status_code != 200:
-        raise Exception('DeepL request failed with status code {}'.format(response.status_code))
-    translated_text = response.json()['translations'][0]['text']
-    return translated_text
+def translate_subtitle(translator, sub, target_lang="ZH"):
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            result = translator.translate_text(sub.text, target_lang=target_lang)
+            return f"{sub.index}\n{sub.start} --> {sub.end}\n{result.text}\n\n"
+        except deepl.exceptions.QuotaExceededException:
+            raise Exception("DeepL API 配额已用尽。请稍后再试或升级您的计划。")
+        except deepl.exceptions.TooManyRequestsException:
+            if attempt < max_retries - 1:
+                time.sleep(1)  # 等待1秒后重试
+                continue
+            else:
+                raise
+        except Exception as e:
+            print(f"翻译字幕 {sub.index} 时发生错误: {str(e)}")
+            return f"{sub.index}\n{sub.start} --> {sub.end}\n{sub.text} (翻译失败)\n\n"
 
-def translate_srt_file(file_path, api_key, target_language='zh', progress_callback=None):
-    with open(file_path, 'rb') as f:
-        result = chardet.detect(f.read())
+def translate_srt_file(input_file, output_file, api_key, progress_callback=None):
+    translator = deepl.Translator(api_key)
 
-    subs = pysrt.open(file_path, encoding=result['encoding'])
+    # 检查 API 密钥是否有效
+    try:
+        usage = translator.get_usage()
+        print(f"DeepL API usage: {usage.character.count}/{usage.character.limit}")
+    except deepl.exceptions.AuthorizationException:
+        raise Exception("DeepL API 密钥无效。请检查您的 API 密钥。")
+    except Exception as e:
+        raise Exception(f"检查 DeepL API 密钥时发生错误: {str(e)}")
 
+    subs = pysrt.open(input_file)
     total_subs = len(subs)
-    translated_subs = 0
 
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_to_sub = {executor.submit(translate_text, sub.text, api_key, target_language): sub for sub in subs}
-        for future in concurrent.futures.as_completed(future_to_sub):
-            sub = future_to_sub[future]
-            try:
-                translated_text = future.result()
-                sub.text = translated_text
-                translated_subs += 1
-                if progress_callback:
-                    progress_callback(translated_subs / total_subs)
-            except Exception as exc:
-                print('%r generated an exception: %s' % (sub, exc))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_sub = {executor.submit(translate_subtitle, translator, sub): sub for sub in subs}
 
-    translated_file_path = file_path.replace('.srt', '.zh.srt')
-    subs.save(translated_file_path, encoding='utf-8')
-    return translated_file_path
+        results = []
+        for future in tqdm(concurrent.futures.as_completed(future_to_sub), total=total_subs, desc="Translating"):
+            results.append(future.result())
+            if progress_callback:
+                progress_callback(len(results) / total_subs)
+
+    # 按原始顺序排序结果
+    sorted_results = sorted(results, key=lambda x: int(x.split('\n')[0]))
+
+    with open(output_file, 'w', encoding='utf-8') as f:
+        for result in sorted_results:
+            f.write(result)
+
+    print(f"翻译完成。输出文件: {output_file}")

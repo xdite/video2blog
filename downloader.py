@@ -17,7 +17,7 @@ def download_video(url, output_dir, progress_callback):
     ydl_opts = {
         'format': 'bestvideo[height<=1080][ext=mp4]',
         'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
-        'restrictfilenames': True,  # 使用 yt-dlp 的文件名限制
+        'restrictfilenames': True,
         'progress_hooks': [yt_dlp_hook],
         'postprocessors': [],
     }
