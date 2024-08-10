@@ -45,9 +45,13 @@ def main():
                     st.session_state.safe_title = sanitize_filename(video_title)
                     st.session_state.mp4_path = video_path
 
+                    st.write(f"Debug: Video downloaded to {st.session_state.mp4_path}")
+
                     subtitles = get_subtitles(video_id)
                     st.session_state.srt_path = os.path.join(output_dir, f"{st.session_state.safe_title}.srt")
                     save_subtitles_as_srt(subtitles, st.session_state.srt_path)
+
+                    st.write(f"Debug: Subtitles saved to {st.session_state.srt_path}")
 
                     # 检查是否已存在中文字幕文件
                     st.session_state.zh_srt_path = os.path.join(output_dir, f"{st.session_state.safe_title}.zh.srt")
@@ -55,8 +59,45 @@ def main():
                         st.success("视频、原始字幕和中文字幕下载成功！")
                     else:
                         st.success("视频和原始字幕下载成功！")
+
+                    # 自动开始生成 PDF
+                    st.session_state.pdf_path = os.path.join(output_dir, f"{st.session_state.safe_title}.pdf")
+                    if not os.path.exists(st.session_state.pdf_path):
+                        st.info("正在生成 PDF...")
+                        png_progress_bar = st.progress(0)
+                        pdf_progress_bar = st.progress(0)
+                        status_text = st.empty()
+
+                        def update_png_progress(progress):
+                            png_progress_bar.progress(progress)
+                            status_text.text(f"生成字幕帧进度: {progress:.1%}")
+
+                        def update_pdf_progress(progress):
+                            pdf_progress_bar.progress(progress)
+                            status_text.text(f"转换 PDF 进度: {progress:.1%}")
+
+                        try:
+                            pdf_created, failed_frames = video_to_pdf(
+                                st.session_state.mp4_path,
+                                png_progress_callback=update_png_progress,
+                                pdf_progress_callback=update_pdf_progress
+                            )
+
+                            if os.path.exists(st.session_state.pdf_path):
+                                st.success("PDF 文件创建成功！")
+                            else:
+                                st.warning("系统无法检测到 PDF 文件，但这可能是由于权限或路径问题。如果您确定文件已创建，可以尝试手动在输出目录查找。")
+
+                            if failed_frames:
+                                st.info(f"注意：在处理过程中，第 {', '.join(map(str, failed_frames))} 帧出现问题被跳过。")
+
+                        except Exception as e:
+                            st.error(f"PDF 转换过程中发生错误: {str(e)}")
+                    else:
+                        st.success("PDF 文件已存在，可以直接下载。")
+
                 except Exception as e:
-                    st.error(f"下载失败: {str(e)}")
+                    st.error(f"下载或处理过程中发生错误: {str(e)}")
         else:
             st.warning("请输入有效的 YouTube URL")
 
@@ -78,80 +119,6 @@ def main():
                 file_name=f"{st.session_state.safe_title}.srt",
                 mime="text/srt"
             )
-
-    # 翻译字幕
-    if st.session_state.srt_path and os.path.exists(st.session_state.srt_path):
-        if not os.path.exists(st.session_state.zh_srt_path):
-            if st.button("翻译字幕为简体中文"):
-                with st.spinner("正在翻译字幕..."):
-                    try:
-                        deepl_api_key = os.getenv("DEEPL_API_KEY")
-                        if not deepl_api_key:
-                            st.error("未找到有效的 DeepL API Key。请检查 .env 文件。")
-                        else:
-                            # 添加翻译进度条
-                            translation_progress = st.progress(0)
-                            def update_translation_progress(progress):
-                                translation_progress.progress(progress)
-
-                            st.session_state.zh_srt_path = translate_srt_file(
-                                st.session_state.srt_path,
-                                deepl_api_key,
-                                progress_callback=update_translation_progress
-                            )
-                            st.success("字幕翻译成功！")
-                    except Exception as e:
-                        st.error(f"翻译失败: {str(e)}")
-        else:
-            st.success("中文字幕文件已存在，无需翻译。")
-
-    # 显示中文字幕下载链接
-    if st.session_state.zh_srt_path and os.path.exists(st.session_state.zh_srt_path):
-        with open(st.session_state.zh_srt_path, "rb") as file:
-            st.download_button(
-                label="下载中文 SRT 字幕文件",
-                data=file,
-                file_name=f"{st.session_state.safe_title}.zh.srt",
-                mime="text/srt"
-            )
-
-    # 转换为 PDF
-    if st.session_state.mp4_path and st.session_state.zh_srt_path and os.path.exists(st.session_state.zh_srt_path):
-        st.session_state.pdf_path = os.path.join(output_dir, f"{st.session_state.safe_title}.pdf")
-
-        if os.path.exists(st.session_state.pdf_path):
-            st.success("PDF 文件已存在，可以直接下载。")
-        else:
-            if st.button("将视频转换为带中文字幕的 PDF"):
-                png_progress_bar = st.progress(0)
-                pdf_progress_bar = st.progress(0)
-                status_text = st.empty()
-
-                def update_png_progress(progress):
-                    png_progress_bar.progress(progress)
-                    status_text.text(f"生成字幕帧进度: {progress:.1%}")
-
-                def update_pdf_progress(progress):
-                    pdf_progress_bar.progress(progress)
-                    status_text.text(f"转换 PDF 进度: {progress:.1%}")
-
-                try:
-                    pdf_created, failed_frames = video_to_pdf(
-                        st.session_state.mp4_path,
-                        png_progress_callback=update_png_progress,
-                        pdf_progress_callback=update_pdf_progress
-                    )
-
-                    if os.path.exists(st.session_state.pdf_path):
-                        st.success("PDF 文件创建成功！")
-                    else:
-                        st.warning("系统无法检测到 PDF 文件，但这可能是由于权限或路径问题。如果您确定文件已创建，可以尝试手动在输出目录查找。")
-
-                    if failed_frames:
-                        st.info(f"注意：在处理过程中，第 {', '.join(map(str, failed_frames))} 帧出现问题被跳过。")
-
-                except Exception as e:
-                    st.error(f"PDF 转换过程中发生错误: {str(e)}")
 
     # 显示 PDF 下载链接
     if st.session_state.pdf_path and os.path.exists(st.session_state.pdf_path):
