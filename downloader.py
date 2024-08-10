@@ -40,7 +40,7 @@ def get_subtitles(video_id):
         if en_transcripts:
             transcript = en_transcripts[0].fetch()
         else:
-            transcript = transcript_list.find_transcript(['en'])
+            return None
         return transcript
     except Exception as e:
         print(f"无法获取字幕: {str(e)}")

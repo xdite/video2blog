@@ -34,6 +34,12 @@ def main():
                 try:
                     video_id = url.split("v=")[1]
 
+                    # 首先检查是否有字幕
+                    subtitles = get_subtitles(video_id)
+                    if not subtitles:
+                        st.error("此视频没有可用的英文字幕，无法处理。")
+                        return
+
                     download_progress = st.progress(0)
                     def update_download_progress(progress):
                         download_progress.progress(progress)
@@ -45,7 +51,6 @@ def main():
                     st.write(f"Debug: Video downloaded to {st.session_state.mp4_path}")
                     st.write(f"Debug: Base filename is {st.session_state.base_filename}")
 
-                    subtitles = get_subtitles(video_id)
                     st.session_state.srt_path = os.path.join(output_dir, f"{st.session_state.base_filename}.srt")
                     save_subtitles_as_srt(subtitles, st.session_state.srt_path)
 
