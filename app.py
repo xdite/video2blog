@@ -41,9 +41,9 @@ def main():
                     def update_download_progress(progress):
                         download_progress.progress(progress)
 
-                    video_title, video_ext = download_video(url, output_dir, update_download_progress)
+                    video_title, video_ext, video_path = download_video(url, output_dir, update_download_progress)
                     st.session_state.safe_title = sanitize_filename(video_title)
-                    st.session_state.mp4_path = os.path.join(output_dir, f"{st.session_state.safe_title}.{video_ext}")
+                    st.session_state.mp4_path = video_path
 
                     subtitles = get_subtitles(video_id)
                     st.session_state.srt_path = os.path.join(output_dir, f"{st.session_state.safe_title}.srt")

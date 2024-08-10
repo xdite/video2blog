@@ -25,7 +25,7 @@ def download_video(url, output_dir, progress_callback):
                 progress_callback(progress)
 
     ydl_opts = {
-        'format': '18',  # 使用 format 18 下载 mp4
+        'format': 'bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480][ext=mp4]/best[ext=mp4]/best',
         'outtmpl': os.path.join(output_dir, '%(title)s.%(ext)s'),
         'restrictfilenames': False,  # 不限制文件名为 ASCII 字符
         'progress_hooks': [yt_dlp_hook],
